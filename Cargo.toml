@@ -1,0 +1,11 @@
+[package]
+name = "stoat"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jacob Lindahl <aviator9402@gmail.com>"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+egui = "0.24"
+opendal = "0.43"
+sled = "0.34"
