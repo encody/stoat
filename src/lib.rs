@@ -1,50 +1,34 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NoteId(String);
+mod note;
 
-pub struct Note {
-    pub id: NoteId,
-    pub title: String,
-    pub content: Vec<ContentNode>,
-}
-
-pub enum Span {
-    Text(TextSpan),
-    Annotation(Box<AnnotationSpan>),
-}
-
-pub struct TextSpan {
-    pub text: String,
-}
-
-pub enum AnnotationSpan {
-    Bold(Span),
-    Italic(Span),
-    Underline(Span),
-    Strikeout(Span),
-    Code(Span),
-    Link {
-        span: Span,
-        path: String,
-    },
-    Tag(Span),
-}
-
-pub struct TextItem {
-    pub spans: Vec<Span>,
-}
-
-pub struct ContentNode {
-    pub content: String,
-    pub children: Vec<ContentNode>,
-}
-
+#[derive(Default, Clone, Debug)]
 pub struct Notebook {
-    pub store: HashMap<NoteId, Note>,
+    pub store: HashMap<note::NoteId, note::Note>,
 }
 
 impl Notebook {}
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use note::*;
+
+    #[test]
+    fn test() {
+        let note = Note {
+            id: "1".into(),
+            title: "title".into(),
+            content: Block::Ul(vec![Line {
+                spans: vec![Span::Text(TextSpan {
+                    text: "text".into(),
+                })],
+                child: None,
+            }]),
+        };
+
+        let content = note.content.text_content();
+
+        assert_eq!(content, "text");
+    }
+}
