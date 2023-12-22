@@ -6,6 +6,14 @@ authors = ["Jacob Lindahl <aviator9402@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-egui = "0.24"
+clap = { version = "4", features = ["derive"] }
+config = "0.13"
+chrono = { version = "0.4", features = ["serde"] }
+directories = "5"
+gray_matter = { version = "0.2", default-features = false, features = ["yaml"] }
+notify = "6"
 opendal = "0.43"
+serde = "1"
 sled = "0.34"
+tantivy = "0.21"
+pulldown-cmark = "0.9"

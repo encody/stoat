@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-mod note;
+pub mod note;
 
 #[derive(Default, Clone, Debug)]
 pub struct Notebook {
@@ -16,15 +16,20 @@ mod tests {
 
     #[test]
     fn test() {
+        println!("{}", chrono::Utc::now());
         let note = Note {
             id: "1".into(),
-            title: "title".into(),
-            content: Block::Ul(vec![Line {
+            metadata: Metadata {
+                title: Some("title".to_string()),
+                created_ms: None,
+                modified_ms: None,
+            },
+            content: Block::Ul(Ul::new(vec![Line {
                 spans: vec![Span::Text(TextSpan {
                     text: "text".into(),
                 })],
                 child: None,
-            }]),
+            }])),
         };
 
         let content = note.content.text_content();

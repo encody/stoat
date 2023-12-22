@@ -1,5 +1,7 @@
 use std::{borrow::Cow, ops::Deref};
 
+use serde::Deserialize;
+
 pub trait TextContent {
     fn text_content(&self) -> Cow<'_, str>;
 }
@@ -114,25 +116,105 @@ impl TextContent for Line {
 
 #[derive(Clone, Debug)]
 pub enum Block {
-    Ul(Vec<Line>),
-    Ol(Vec<Line>),
-    Code(String),
-    Blockquote(Box<Block>),
+    Header(Header),
+    Ul(Ul),
+    Ol(Ol),
+    Code(Code),
+    Blockquote(Blockquote),
 }
 
 impl TextContent for Block {
     fn text_content(&self) -> Cow<'_, str> {
         match self {
-            Self::Ul(lines) | Self::Ol(lines) => lines.text_content(),
-            Self::Code(code) => Cow::Borrowed(code),
+            Self::Header(header) => header.text_content(),
+            Self::Ul(ul) => ul.text_content(),
+            Self::Ol(ol) => ol.text_content(),
+            Self::Code(code) => code.text_content(),
             Self::Blockquote(block) => block.text_content(),
         }
     }
 }
 
 #[derive(Clone, Debug)]
+pub struct Header {
+    pub level: u8,
+    pub text: Vec<Span>,
+}
+
+impl TextContent for Header {
+    fn text_content(&self) -> Cow<'_, str> {
+        self.text.text_content()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Ul {
+    pub items: Vec<Line>,
+}
+
+impl Ul {
+    pub fn new(items: Vec<Line>) -> Self {
+        Self { items }
+    }
+}
+
+impl TextContent for Ul {
+    fn text_content(&self) -> Cow<'_, str> {
+        self.items.text_content()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Ol {
+    pub items: Vec<Line>,
+}
+
+impl Ol {
+    pub fn new(items: Vec<Line>) -> Self {
+        Self { items }
+    }
+}
+
+impl TextContent for Ol {
+    fn text_content(&self) -> Cow<'_, str> {
+        self.items.text_content()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Code {
+    pub code: String,
+}
+
+impl TextContent for Code {
+    fn text_content(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.code)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Blockquote {
+    pub content: Vec<Block>,
+}
+
+impl TextContent for Blockquote {
+    fn text_content(&self) -> Cow<'_, str> {
+        self.content.text_content()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Note {
     pub id: NoteId,
-    pub title: String,
+    pub metadata: Metadata,
     pub content: Block,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Metadata {
+    pub title: Option<String>,
+    #[serde(rename = "created")]
+    pub created_ms: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(rename = "modified")]
+    pub modified_ms: Option<chrono::DateTime<chrono::Utc>>,
 }
