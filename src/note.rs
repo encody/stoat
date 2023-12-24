@@ -56,41 +56,46 @@ impl TextContent for TextSpan {
 }
 
 #[derive(Clone, Debug)]
-pub enum AnnotationSpan {
-    Bold(Vec<Span>),
-    Italic(Vec<Span>),
-    Underline(Vec<Span>),
-    Strikeout(Vec<Span>),
-    Code(Vec<Span>),
-    Link { span: Vec<Span>, path: String },
-    Tag(Vec<Span>),
+pub enum MarkupKind {
+    Strong,
+    Emphasis,
 }
 
-impl TextContent for AnnotationSpan {
-    fn text_content(&self) -> Cow<'_, str> {
-        match self {
-            Self::Bold(span)
-            | Self::Italic(span)
-            | Self::Underline(span)
-            | Self::Strikeout(span)
-            | Self::Code(span)
-            | Self::Link { span, .. }
-            | Self::Tag(span) => span.text_content(),
+impl TryFrom<&pulldown_cmark::Tag<'_>> for MarkupKind {
+    type Error = ();
+
+    fn try_from(value: &pulldown_cmark::Tag<'_>) -> Result<Self, Self::Error> {
+        match value {
+            pulldown_cmark::Tag::Emphasis => Ok(Self::Emphasis),
+            pulldown_cmark::Tag::Strong => Ok(Self::Strong),
+            _ => Err(()),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MarkupSpan {
+    pub kind: MarkupKind,
+    pub inner: Vec<Span>,
+}
+
+impl TextContent for MarkupSpan {
+    fn text_content(&self) -> Cow<'_, str> {
+        self.inner.text_content()
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum Span {
     Text(TextSpan),
-    Annotation(Box<AnnotationSpan>),
+    Markup(MarkupSpan),
 }
 
 impl TextContent for Span {
     fn text_content(&self) -> Cow<'_, str> {
         match self {
             Self::Text(span) => span.text_content(),
-            Self::Annotation(annotation) => annotation.text_content(),
+            Self::Markup(annotation) => annotation.text_content(),
         }
     }
 }
@@ -115,91 +120,20 @@ impl TextContent for Line {
 }
 
 #[derive(Clone, Debug)]
-pub enum Block {
-    Header(Header),
-    Ul(Ul),
-    Ol(Ol),
-    Code(Code),
-    Blockquote(Blockquote),
+pub struct Block {
+    pub kind: BlockKind,
+    pub items: Vec<Line>,
+}
+
+#[derive(Clone, Debug)]
+pub enum BlockKind {
+    Ol,
+    Ul,
 }
 
 impl TextContent for Block {
     fn text_content(&self) -> Cow<'_, str> {
-        match self {
-            Self::Header(header) => header.text_content(),
-            Self::Ul(ul) => ul.text_content(),
-            Self::Ol(ol) => ol.text_content(),
-            Self::Code(code) => code.text_content(),
-            Self::Blockquote(block) => block.text_content(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Header {
-    pub level: u8,
-    pub text: Vec<Span>,
-}
-
-impl TextContent for Header {
-    fn text_content(&self) -> Cow<'_, str> {
-        self.text.text_content()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Ul {
-    pub items: Vec<Line>,
-}
-
-impl Ul {
-    pub fn new(items: Vec<Line>) -> Self {
-        Self { items }
-    }
-}
-
-impl TextContent for Ul {
-    fn text_content(&self) -> Cow<'_, str> {
         self.items.text_content()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Ol {
-    pub items: Vec<Line>,
-}
-
-impl Ol {
-    pub fn new(items: Vec<Line>) -> Self {
-        Self { items }
-    }
-}
-
-impl TextContent for Ol {
-    fn text_content(&self) -> Cow<'_, str> {
-        self.items.text_content()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Code {
-    pub code: String,
-}
-
-impl TextContent for Code {
-    fn text_content(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.code)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Blockquote {
-    pub content: Vec<Block>,
-}
-
-impl TextContent for Blockquote {
-    fn text_content(&self) -> Cow<'_, str> {
-        self.content.text_content()
     }
 }
 

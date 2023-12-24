@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use pulldown_cmark::{Event, Tag};
-use stoat::note::{Block, Line, Metadata, Note, NoteId, Span, TextSpan, Ul};
+use stoat::note::{Block, BlockKind, Line, MarkupKind, Metadata, Note, NoteId, Span, TextSpan};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -51,56 +51,74 @@ fn load_directory(path: &Path) -> Vec<Note> {
 
             let mut md_doc = pulldown_cmark::Parser::new(&front_matter.content);
 
-            fn parse_line(md_doc: &mut pulldown_cmark::Parser) -> Line {
-                let mut line = Line {
-                    spans: vec![],
-                    child: None,
-                };
+            fn take_spans(md_doc: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
+                let mut spans = vec![];
 
                 while let Some(e) = md_doc.next() {
                     match e {
-                        Event::Text(text) => line.spans.push(Span::Text(TextSpan {
+                        Event::Text(text) => spans.push(Span::Text(TextSpan {
                             text: text.into_string(),
                         })),
-                        Event::End(Tag::Item) => {
+                        Event::Start(tag) => {
+                            if let Ok(kind) = MarkupKind::try_from(&tag) {
+                                spans.push(Span::Markup(stoat::note::MarkupSpan {
+                                    kind,
+                                    inner: take_spans(md_doc, &tag),
+                                }))
+                            } else {
+                                eprintln!("unknown tag while parsing span: {tag:?}");
+                            }
+                        }
+                        Event::End(ending) if &ending == end_tag => {
                             break;
                         }
                         _ => {
-                            eprintln!("unknown event while parsing list item: {e:?}");
+                            eprintln!("unknown event while parsing span: {e:?}");
                         }
                     }
                 }
 
-                line
+                spans
             }
 
-            fn parse_ul(md_doc: &mut pulldown_cmark::Parser) -> Ul {
-                let mut items = vec![];
+            fn take_item(md_doc: &mut pulldown_cmark::Parser) -> Line {
+                Line {
+                    spans: take_spans(md_doc, &Tag::Item),
+                    child: None,
+                }
+            }
+
+            fn take_lines_until(md_doc: &mut pulldown_cmark::Parser, until: Tag) -> Vec<Line> {
+                let mut lines = vec![];
 
                 while let Some(e) = md_doc.next() {
                     match e {
                         Event::Start(Tag::Item) => {
-                            items.push(parse_line(md_doc));
+                            lines.push(take_item(md_doc));
                         }
-                        Event::End(Tag::List(None)) => {
+                        Event::End(ending) if ending == until => {
                             break;
                         }
                         e => {
-                            eprintln!("unknown event while parsing ul: {e:?}");
+                            panic!("unknown event while parsing ul: {e:?}");
                         }
                     }
                 }
 
-                Ul::new(items)
+                lines
             }
 
             while let Some(event) = md_doc.next() {
                 match event {
                     Event::Start(Tag::List(None)) => {
-                        parse_ul(&mut md_doc);
+                        let items = take_lines_until(&mut md_doc, Tag::List(None));
+                        let block = Block {
+                            kind: BlockKind::Ul,
+                            items,
+                        };
                     }
                     e => {
-                        println!("unparsed event: {e:?}");
+                        panic!("unparsed event: {e:?}");
                     }
                 }
             }

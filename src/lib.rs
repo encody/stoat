@@ -24,12 +24,15 @@ mod tests {
                 created_ms: None,
                 modified_ms: None,
             },
-            content: Block::Ul(Ul::new(vec![Line {
-                spans: vec![Span::Text(TextSpan {
-                    text: "text".into(),
-                })],
-                child: None,
-            }])),
+            content: Block {
+                kind: BlockKind::Ul,
+                items: vec![Line {
+                    spans: vec![Span::Text(TextSpan {
+                        text: "text".into(),
+                    })],
+                    child: None,
+                }],
+            },
         };
 
         let content = note.content.text_content();
