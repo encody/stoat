@@ -21,8 +21,8 @@ mod tests {
             id: "1".into(),
             metadata: Metadata {
                 title: Some("title".to_string()),
-                created_ms: None,
-                modified_ms: None,
+                created: None,
+                modified: None,
             },
             content: Block {
                 kind: BlockKind::Ul,

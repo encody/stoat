@@ -1,5 +1,6 @@
 use std::{borrow::Cow, ops::Deref};
 
+use pulldown_cmark::{Event, Tag};
 use serde::Deserialize;
 
 pub trait TextContent {
@@ -144,11 +145,101 @@ pub struct Note {
     pub content: Block,
 }
 
+impl Note {
+    pub fn new(id: NoteId, text: &str) -> Result<Self, ()> {
+        let front_matter_parser = gray_matter::Matter::<gray_matter::engine::YAML>::new();
+        let front_matter = front_matter_parser.parse(text);
+
+        let metadata: Metadata = front_matter.data.unwrap().deserialize().unwrap();
+
+        println!("Metadata:");
+
+        println!("{:?}", metadata);
+
+        let mut md_doc = pulldown_cmark::Parser::new(&front_matter.content);
+
+        fn take_spans(md_doc: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
+            let mut spans = vec![];
+
+            while let Some(e) = md_doc.next() {
+                match e {
+                    Event::Text(text) => spans.push(Span::Text(TextSpan {
+                        text: text.into_string(),
+                    })),
+                    Event::Start(tag) => {
+                        if let Ok(kind) = MarkupKind::try_from(&tag) {
+                            spans.push(Span::Markup(MarkupSpan {
+                                kind,
+                                inner: take_spans(md_doc, &tag),
+                            }))
+                        } else {
+                            eprintln!("unknown tag while parsing span: {tag:?}");
+                        }
+                    }
+                    Event::End(ending) if &ending == end_tag => {
+                        break;
+                    }
+                    _ => {
+                        eprintln!("unknown event while parsing span: {e:?}");
+                    }
+                }
+            }
+
+            spans
+        }
+
+        fn take_item(md_doc: &mut pulldown_cmark::Parser) -> Line {
+            Line {
+                spans: take_spans(md_doc, &Tag::Item),
+                child: None,
+            }
+        }
+
+        fn take_lines_until(md_doc: &mut pulldown_cmark::Parser, until: Tag) -> Vec<Line> {
+            let mut lines = vec![];
+
+            while let Some(e) = md_doc.next() {
+                match e {
+                    Event::Start(Tag::Item) => {
+                        lines.push(take_item(md_doc));
+                    }
+                    Event::End(ending) if ending == until => {
+                        break;
+                    }
+                    _ => {
+                        panic!("unknown event while parsing ul: {e:?}");
+                    }
+                }
+            }
+
+            lines
+        }
+
+        let content = if let Some(event) = md_doc.next() {
+            match event {
+                Event::Start(Tag::List(None)) => Block {
+                    kind: BlockKind::Ul,
+                    items: take_lines_until(&mut md_doc, Tag::List(None)),
+                },
+                e => {
+                    panic!("unparsed event: {e:?}");
+                }
+            }
+        } else {
+            panic!("note empty or unparsable");
+        };
+
+        Ok(Note {
+            id,
+            metadata,
+            content,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Metadata {
     pub title: Option<String>,
-    #[serde(rename = "created")]
-    pub created_ms: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(rename = "modified")]
-    pub modified_ms: Option<chrono::DateTime<chrono::Utc>>,
+    pub created: Option<chrono::DateTime<chrono::Utc>>,
+    pub modified: Option<chrono::DateTime<chrono::Utc>>,
 }
