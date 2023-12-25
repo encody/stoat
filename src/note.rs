@@ -156,12 +156,12 @@ impl Note {
 
         println!("{:?}", metadata);
 
-        let mut md_doc = pulldown_cmark::Parser::new(&front_matter.content);
+        let mut parser = pulldown_cmark::Parser::new(&front_matter.content);
 
-        fn take_spans(md_doc: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
+        fn take_spans(parser: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
             let mut spans = vec![];
 
-            while let Some(e) = md_doc.next() {
+            while let Some(e) = parser.next() {
                 match e {
                     Event::Text(text) => spans.push(Span::Text(TextSpan {
                         text: text.into_string(),
@@ -170,7 +170,7 @@ impl Note {
                         if let Ok(kind) = MarkupKind::try_from(&tag) {
                             spans.push(Span::Markup(MarkupSpan {
                                 kind,
-                                inner: take_spans(md_doc, &tag),
+                                inner: take_spans(parser, &tag),
                             }))
                         } else {
                             eprintln!("unknown tag while parsing span: {tag:?}");
@@ -188,20 +188,20 @@ impl Note {
             spans
         }
 
-        fn take_item(md_doc: &mut pulldown_cmark::Parser) -> Line {
+        fn take_item(parser: &mut pulldown_cmark::Parser) -> Line {
             Line {
-                spans: take_spans(md_doc, &Tag::Item),
+                spans: take_spans(parser, &Tag::Item),
                 child: None,
             }
         }
 
-        fn take_lines_until(md_doc: &mut pulldown_cmark::Parser, until: Tag) -> Vec<Line> {
+        fn take_lines_until(parser: &mut pulldown_cmark::Parser, until: Tag) -> Vec<Line> {
             let mut lines = vec![];
 
-            while let Some(e) = md_doc.next() {
+            while let Some(e) = parser.next() {
                 match e {
                     Event::Start(Tag::Item) => {
-                        lines.push(take_item(md_doc));
+                        lines.push(take_item(parser));
                     }
                     Event::End(ending) if ending == until => {
                         break;
@@ -215,11 +215,11 @@ impl Note {
             lines
         }
 
-        let content = if let Some(event) = md_doc.next() {
+        let content = if let Some(event) = parser.next() {
             match event {
                 Event::Start(Tag::List(None)) => Block {
                     kind: BlockKind::Ul,
-                    items: take_lines_until(&mut md_doc, Tag::List(None)),
+                    items: take_lines_until(&mut parser, Tag::List(None)),
                 },
                 e => {
                     panic!("unparsed event: {e:?}");
@@ -240,6 +240,39 @@ impl Note {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Metadata {
     pub title: Option<String>,
+    #[serde(with = "date_serde")]
     pub created: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(with = "date_serde")]
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+mod date_serde {
+    use serde::Deserialize;
+
+    pub fn serialize<S>(
+        date: &chrono::DateTime<chrono::Utc>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&date.to_rfc2822())
+    }
+
+    pub fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = if let Ok(s) = String::deserialize(deserializer) {
+            s
+        } else {
+            return Ok(None);
+        };
+
+        Ok(Some(dateparser::parse(&s).map_err(|e| {
+            <D::Error as serde::de::Error>::custom(format!("invalid date: {}", e))
+        })?))
+    }
 }
