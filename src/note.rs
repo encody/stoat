@@ -195,7 +195,7 @@ impl Note {
             }
         }
 
-        fn take_lines_until(parser: &mut pulldown_cmark::Parser, until: Tag) -> Vec<Line> {
+        fn take_lines_until(parser: &mut pulldown_cmark::Parser, end_tag: &Tag) -> Vec<Line> {
             let mut lines = vec![];
 
             while let Some(e) = parser.next() {
@@ -203,7 +203,7 @@ impl Note {
                     Event::Start(Tag::Item) => {
                         lines.push(take_item(parser));
                     }
-                    Event::End(ending) if ending == until => {
+                    Event::End(ending) if &ending == end_tag => {
                         break;
                     }
                     _ => {
@@ -217,9 +217,13 @@ impl Note {
 
         let content = if let Some(event) = parser.next() {
             match event {
-                Event::Start(Tag::List(None)) => Block {
-                    kind: BlockKind::Ul,
-                    items: take_lines_until(&mut parser, Tag::List(None)),
+                Event::Start(ref tag @ Tag::List(ref numbering)) => Block {
+                    kind: if numbering.is_some() {
+                        BlockKind::Ol
+                    } else {
+                        BlockKind::Ul
+                    },
+                    items: take_lines_until(&mut parser, tag),
                 },
                 e => {
                     panic!("unparsed event: {e:?}");
@@ -239,10 +243,11 @@ impl Note {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Metadata {
+    #[serde(default)]
     pub title: Option<String>,
-    #[serde(with = "date_serde")]
+    #[serde(with = "date_serde", default)]
     pub created: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "date_serde")]
+    #[serde(with = "date_serde", default)]
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
 }
 
