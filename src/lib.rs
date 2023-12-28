@@ -11,8 +11,7 @@ impl Notebook {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use note::*;
+    use crate::note::{Block, BlockKind, Line, Metadata, Note, Span, TextContent, TextSpan};
 
     #[test]
     fn test() {
