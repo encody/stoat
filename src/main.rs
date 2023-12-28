@@ -37,7 +37,7 @@ fn load_directory(path: &Path) -> Vec<Note> {
             println!("{}", contents);
             let id: NoteId = file_name[..file_name.len() - 3].into();
 
-            Note::new(id, &contents).ok()
+            Note::create(id, &contents).ok()
         })
         .collect()
 }

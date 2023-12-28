@@ -24,7 +24,7 @@ mod tests {
                 created: None,
                 modified: None,
             },
-            content: Block {
+            content: vec![Block {
                 kind: BlockKind::Ul,
                 items: vec![Line {
                     spans: vec![Span::Text(TextSpan {
@@ -32,7 +32,7 @@ mod tests {
                     })],
                     child: None,
                 }],
-            },
+            }],
         };
 
         let content = note.content.text_content();

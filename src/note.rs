@@ -132,6 +132,18 @@ pub enum BlockKind {
     Ul,
 }
 
+impl TryFrom<&'_ Tag<'_>> for BlockKind {
+    type Error = ();
+
+    fn try_from(value: &Tag) -> Result<Self, Self::Error> {
+        match value {
+            Tag::List(None) => Ok(Self::Ul),
+            Tag::List(Some(_)) => Ok(Self::Ol),
+            _ => Err(()),
+        }
+    }
+}
+
 impl TextContent for Block {
     fn text_content(&self) -> Cow<'_, str> {
         self.items.text_content()
@@ -142,96 +154,41 @@ impl TextContent for Block {
 pub struct Note {
     pub id: NoteId,
     pub metadata: Metadata,
-    pub content: Block,
+    pub content: Vec<Block>,
 }
 
 impl Note {
-    pub fn new(id: NoteId, text: &str) -> Result<Self, ()> {
+    pub fn create(id: NoteId, text: &str) -> Result<Self, ()> {
         let front_matter_parser = gray_matter::Matter::<gray_matter::engine::YAML>::new();
         let front_matter = front_matter_parser.parse(text);
 
-        let metadata: Metadata = front_matter.data.unwrap().deserialize().unwrap();
-
-        println!("Metadata:");
-
-        println!("{:?}", metadata);
+        let metadata = front_matter
+            .data
+            .and_then(|data| data.deserialize::<Metadata>().ok())
+            .unwrap_or_default();
 
         let mut parser = pulldown_cmark::Parser::new(&front_matter.content);
 
-        fn take_spans(parser: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
-            let mut spans = vec![];
+        let mut content = vec![];
 
-            while let Some(e) = parser.next() {
-                match e {
-                    Event::Text(text) => spans.push(Span::Text(TextSpan {
-                        text: text.into_string(),
-                    })),
-                    Event::Start(tag) => {
-                        if let Ok(kind) = MarkupKind::try_from(&tag) {
-                            spans.push(Span::Markup(MarkupSpan {
-                                kind,
-                                inner: take_spans(parser, &tag),
-                            }))
-                        } else {
-                            eprintln!("unknown tag while parsing span: {tag:?}");
+        while let Some(event) = parser.next() {
+            let block = match event {
+                Event::Start(tag) => {
+                    if let Ok(kind) = BlockKind::try_from(&tag) {
+                        Block {
+                            kind,
+                            items: take_lines_until(&mut parser, &tag),
                         }
-                    }
-                    Event::End(ending) if &ending == end_tag => {
-                        break;
-                    }
-                    _ => {
-                        eprintln!("unknown event while parsing span: {e:?}");
-                    }
-                }
-            }
-
-            spans
-        }
-
-        fn take_item(parser: &mut pulldown_cmark::Parser) -> Line {
-            Line {
-                spans: take_spans(parser, &Tag::Item),
-                child: None,
-            }
-        }
-
-        fn take_lines_until(parser: &mut pulldown_cmark::Parser, end_tag: &Tag) -> Vec<Line> {
-            let mut lines = vec![];
-
-            while let Some(e) = parser.next() {
-                match e {
-                    Event::Start(Tag::Item) => {
-                        lines.push(take_item(parser));
-                    }
-                    Event::End(ending) if &ending == end_tag => {
-                        break;
-                    }
-                    _ => {
-                        panic!("unknown event while parsing ul: {e:?}");
-                    }
-                }
-            }
-
-            lines
-        }
-
-        let content = if let Some(event) = parser.next() {
-            match event {
-                Event::Start(ref tag @ Tag::List(ref numbering)) => Block {
-                    kind: if numbering.is_some() {
-                        BlockKind::Ol
                     } else {
-                        BlockKind::Ul
-                    },
-                    items: take_lines_until(&mut parser, tag),
-                },
+                        panic!("unknown tag while parsing block: {tag:?}");
+                    }
+                }
                 e => {
                     panic!("unparsed event: {e:?}");
                 }
-            }
-        } else {
-            panic!("note empty or unparsable");
-        };
+            };
+            content.push(block);
+        }
 
         Ok(Note {
             id,
@@ -241,13 +198,66 @@ impl Note {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+fn take_spans(parser: &mut pulldown_cmark::Parser<'_, '_>, end_tag: &Tag) -> Vec<Span> {
+    let mut spans = vec![];
+
+    while let Some(e) = parser.next() {
+        match e {
+            Event::Text(text) => spans.push(Span::Text(TextSpan {
+                text: text.into_string(),
+            })),
+            Event::Start(tag) => {
+                if let Ok(kind) = MarkupKind::try_from(&tag) {
+                    spans.push(Span::Markup(MarkupSpan {
+                        kind,
+                        inner: take_spans(parser, &tag),
+                    }))
+                } else {
+                    eprintln!("unknown tag while parsing span: {tag:?}");
+                }
+            }
+            Event::End(ending) if &ending == end_tag => {
+                break;
+            }
+            _ => {
+                eprintln!("unknown event while parsing span: {e:?}");
+            }
+        }
+    }
+
+    spans
+}
+
+fn take_lines_until(parser: &mut pulldown_cmark::Parser, end_tag: &Tag) -> Vec<Line> {
+    let mut lines = vec![];
+
+    while let Some(e) = parser.next() {
+        match e {
+            Event::Start(Tag::Item) => {
+                lines.push(Line {
+                    spans: take_spans(parser, &Tag::Item),
+                    child: None,
+                });
+            }
+            Event::End(ending) if &ending == end_tag => {
+                break;
+            }
+            _ => {
+                panic!("unknown event while parsing ul: {e:?}");
+            }
+        }
+    }
+
+    lines
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct Metadata {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(with = "date_serde", default)]
+    #[serde(with = "date_serde", default, skip_serializing_if = "Option::is_none")]
     pub created: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "date_serde", default)]
+    #[serde(with = "date_serde", default, skip_serializing_if = "Option::is_none")]
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
 }
 
