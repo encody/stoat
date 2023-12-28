@@ -8,6 +8,8 @@ mod line;
 pub use line::*;
 mod metadata;
 pub use metadata::*;
+mod render;
+pub use render::*;
 mod span;
 pub use span::*;
 

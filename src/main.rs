@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use stoat::note::{Note, NoteId};
+use stoat::note::{Note, NoteId, Render};
 
 static IGNORE_FILES_WITH_LEADING: &[char] = &['.', '_'];
 static NOTES_FILE_EXTENSION: &str = "md"; // not including dot
@@ -53,7 +53,11 @@ fn main() {
         vec![try_load_file(&args.index).expect("Could not load file")]
     };
 
-    println!("Notes:\n\n{notes:#?}");
+    // println!("Notes:\n\n{notes:#?}");
+
+    for note in notes {
+        println!("{}", &*note.content.render());
+    }
 
     // let project_dirs = directories::ProjectDirs::from("", "", "stoat").unwrap();
 }
