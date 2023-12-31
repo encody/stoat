@@ -14,6 +14,6 @@ impl Render<PlainText> for Line {
 
 impl Render<Markdown> for Line {
     fn render(&self) -> Markdown {
-        Markdown(Render::<Markdown>::render(&*self.spans).0)
+        self.spans.render()
     }
 }
