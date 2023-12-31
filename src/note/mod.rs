@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ops::Deref};
+use std::ops::Deref;
 
 use pulldown_cmark::{Event, Tag};
 
@@ -12,25 +12,6 @@ mod render;
 pub use render::*;
 mod span;
 pub use span::*;
-
-pub trait TextContent {
-    fn text_content(&self) -> Cow<'_, str>;
-}
-
-impl<T: TextContent> TextContent for [T] {
-    fn text_content(&self) -> Cow<'_, str> {
-        match self.len() {
-            0 => Cow::Borrowed(""),
-            1 => self[0].text_content(),
-            _ => self
-                .iter()
-                .map(T::text_content)
-                .collect::<Vec<_>>()
-                .join("\n")
-                .into(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NoteId(String);

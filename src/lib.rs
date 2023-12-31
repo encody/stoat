@@ -11,7 +11,9 @@ impl Notebook {}
 
 #[cfg(test)]
 mod tests {
-    use crate::note::{Block, BlockKind, Line, Metadata, Note, Span, TextContent, TextSpan};
+    use crate::note::{
+        plain_text::PlainText, Block, BlockKind, Line, Metadata, Note, Render, Span, TextSpan,
+    };
 
     #[test]
     fn test() {
@@ -34,8 +36,8 @@ mod tests {
             }],
         };
 
-        let content = note.content.text_content();
+        let content = Render::<PlainText>::render(&*note.content);
 
-        assert_eq!(content, "text");
+        assert_eq!(&*content, "* text");
     }
 }

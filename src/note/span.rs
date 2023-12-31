@@ -1,16 +1,8 @@
-use std::borrow::Cow;
-
-use super::TextContent;
+use super::{markdown::Markdown, plain_text::PlainText, Render};
 
 #[derive(Clone, Debug)]
 pub struct TextSpan {
     pub text: String,
-}
-
-impl TextContent for TextSpan {
-    fn text_content(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.text)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -37,23 +29,77 @@ pub struct MarkupSpan {
     pub inner: Vec<Span>,
 }
 
-impl TextContent for MarkupSpan {
-    fn text_content(&self) -> Cow<'_, str> {
-        self.inner.text_content()
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Span {
     Text(TextSpan),
     Markup(MarkupSpan),
 }
 
-impl TextContent for Span {
-    fn text_content(&self) -> Cow<'_, str> {
+impl Render<PlainText> for TextSpan {
+    fn render(&self) -> PlainText {
+        PlainText(self.text.to_string())
+    }
+}
+
+impl Render<PlainText> for MarkupSpan {
+    fn render(&self) -> PlainText {
+        self.inner.render()
+    }
+}
+
+impl Render<PlainText> for Span {
+    fn render(&self) -> PlainText {
         match self {
-            Self::Text(span) => span.text_content(),
-            Self::Markup(annotation) => annotation.text_content(),
+            Span::Text(t) => t.render(),
+            Span::Markup(m) => m.render(),
         }
+    }
+}
+
+impl Render<PlainText> for [Span] {
+    fn render(&self) -> PlainText {
+        PlainText(
+            self.iter()
+                .map(|s| Render::<PlainText>::render(s).0)
+                .collect::<String>(),
+        )
+    }
+}
+
+impl Render<Markdown> for TextSpan {
+    fn render(&self) -> Markdown {
+        Markdown(self.text.to_string())
+    }
+}
+
+impl Render<Markdown> for MarkupSpan {
+    fn render(&self) -> Markdown {
+        let rendered = Render::<Markdown>::render(&*self.inner);
+
+        let delimiter = match self.kind {
+            MarkupKind::Strong => "**",
+            MarkupKind::Emphasis => "_",
+        };
+
+        Markdown([delimiter, &*rendered, delimiter].concat())
+    }
+}
+
+impl Render<Markdown> for Span {
+    fn render(&self) -> Markdown {
+        match self {
+            Span::Text(s) => s.render(),
+            Span::Markup(s) => s.render(),
+        }
+    }
+}
+
+impl Render<Markdown> for [Span] {
+    fn render(&self) -> Markdown {
+        Markdown(
+            self.iter()
+                .map(|s| Render::<Markdown>::render(s).0)
+                .collect::<String>(),
+        )
     }
 }
